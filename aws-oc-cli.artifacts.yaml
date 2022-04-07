@@ -1,0 +1,44 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: aws-oc-cli
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  labels:
+    app: aws-oc-cli
+  name: aws-oc-cli
+spec:
+  failedBuildsHistoryLimit: 3
+  output:
+    to:
+      kind: ImageStreamTag
+      name: aws-oc-cli:latest
+  resources:
+    limits:
+      cpu: 2
+      memory: 2Gi
+    requests:
+      cpu: 100m
+      memory: 2Gi
+  runPolicy: Serial
+  source:
+    type: Dockerfile
+    dockerfile: |
+      FROM ubi8:latest as unzip
+      RUN yum -y install unzip && \
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+          unzip awscliv2.zip
+      FROM ose-cli-artifacts-alt-rhel8:latest
+      COPY --from=unzip /aws /aws
+      RUN /aws/install
+  strategy:
+    dockerStrategy:
+      from:
+        kind: ImageStreamTag
+        name: ose-cli-artifacts-alt-rhel8:latest
+    type: Docker
+  successfulBuildsHistoryLimit: 1
+  triggers:
+    - type: ImageChange

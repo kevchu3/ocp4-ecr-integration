@@ -1,0 +1,119 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ecr-creds-rotator
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: "Replace"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  suspend: false
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: ecr-creds-rotator-sa
+          containers:
+          - name: ecr-creds-rotator
+            image: image-registry.openshift-image-registry.svc:5000/aws-oc-build/aws-oc-cli:latest
+            imagePullPolicy: IfNotPresent
+            envFrom:
+              - secretRef:
+                  name: ecr-creds-rotator-secret
+              - configMapRef:
+                  name: ecr-creds-rotator-cm
+            command:
+              - /bin/sh
+              - -c
+              - |-
+                ECR_TOKEN=`aws ecr get-login-password --region ${AWS_REGION}`
+                oc create secret docker-registry $ECR_SECRET_NAME \
+                --docker-server=https://${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com \
+                --docker-username=AWS \
+                --docker-password="${ECR_TOKEN}" \
+                --dry-run=client -o yaml | oc apply -f -
+                oc secret link default ecr-secret --for=pull
+                oc secret link builder ecr-secret --for=pull,mount
+          restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ecr-creds-rotator-init
+spec:
+  completions: 1
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      serviceAccountName: ecr-creds-rotator-sa
+      containers:
+      - name: ecr-creds-rotator-init
+        image: image-registry.openshift-image-registry.svc:5000/aws-oc-build/aws-oc-cli:latest
+        imagePullPolicy: IfNotPresent
+        envFrom:
+          - secretRef:
+              name: ecr-creds-rotator-secret
+          - configMapRef:
+              name: ecr-creds-rotator-cm
+        command:
+          - /bin/sh
+          - -c
+          - |-
+            ECR_TOKEN=`aws ecr get-login-password --region ${AWS_REGION}`
+            oc create secret docker-registry $ECR_SECRET_NAME \
+            --docker-server=https://${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com \
+            --docker-username=AWS \
+            --docker-password="${ECR_TOKEN}" \
+            --dry-run=client -o yaml | oc apply -f -
+            oc secret link default ecr-secret --for=pull
+            oc secret link builder ecr-secret --for=pull,mount
+      restartPolicy: Never
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ecr-creds-rotator-secret
+stringData:
+  AWS_SECRET_ACCESS_KEY: ""
+  AWS_ACCESS_KEY_ID: ""
+  AWS_ACCOUNT: ""
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecr-creds-rotator-cm
+data:
+  AWS_REGION: ""
+  ECR_SECRET_NAME: ecr-secret
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ecr-creds-rotator-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: role-update-secrets
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create", "delete", "get", "patch"]
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ecr-creds-rotator-rolebinding
+subjects:
+- kind: ServiceAccount
+  name: ecr-creds-rotator-sa
+  apiGroup: ""
+roleRef:
+  kind: Role
+  name: role-update-secrets
+  apiGroup: ""
+---

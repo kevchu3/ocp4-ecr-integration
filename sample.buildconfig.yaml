@@ -1,0 +1,29 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  labels:
+    app: sample-ecr
+  name: sample-ecr
+spec:
+  failedBuildsHistoryLimit: 1
+  output:
+    to:
+      kind: DockerImage
+      name: >-
+        <AWS_ACCOUNT>.dkr.ecr.<AWS_REGION>.amazonaws.com/sample-ecr:latest
+  runPolicy: Serial
+  source:
+    type: Dockerfile
+    dockerfile: |
+      FROM nodejs:latest
+  strategy:
+    dockerStrategy:
+      from:
+        kind: ImageStreamTag
+        name: nodejs:latest
+        namespace: openshift
+    type: Docker
+  successfuBuildsHistoryLimit: 1
+  triggers:
+    - type: ImageChange
+
