@@ -47,7 +47,7 @@ objects:
               - |-
                 ECR_TOKEN=`aws ecr get-login-password --region ${AWS_REGION}`
                 oc create secret docker-registry $ECR_SECRET_NAME \
-                --docker-server=https://${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com \
+                --docker-server=${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com \
                 --docker-username=AWS \
                 --docker-password="${ECR_TOKEN}" \
                 --dry-run=client -o yaml | oc apply -f -
@@ -82,7 +82,7 @@ objects:
           - |-
             ECR_TOKEN=`aws ecr get-login-password --region ${AWS_REGION}`
             oc create secret docker-registry $ECR_SECRET_NAME \
-            --docker-server=https://${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com \
+            --docker-server=${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com \
             --docker-username=AWS \
             --docker-password="${ECR_TOKEN}" \
             --dry-run=client -o yaml | oc apply -f -
